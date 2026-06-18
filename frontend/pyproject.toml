@@ -1,0 +1,18 @@
+[project]
+name = "music-mood-frontend"
+version = "0.1.0"
+description = "Music Mood Therapy — Streamlit UI"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.35",
+    "pandas>=2.2",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
