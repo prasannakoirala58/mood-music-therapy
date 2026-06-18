@@ -8,18 +8,17 @@ Model from the user's current emotional state toward the target (Happy).
 Finds the nearest song in the labeled dataset to each waypoint using
 Euclidean distance in (valence, energy) space.
 
-Returns 3 songs — each a dict with:
+Returns 3 song dicts — one per waypoint:
   track_name, artists, emotion, valence, energy, track_id, spotify_url
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
+TARGET_VALENCE = 0.80
+TARGET_ENERGY = 0.80
 
-TARGET_EMOTION = "Happy"
-TARGET_V, TARGET_E = 0.80, 0.80
-
-# Emotion → (valence, energy) coordinates in Russell's Circumplex Model
+# Emotion coordinates in Russell's Circumplex Model (valence, energy)
 EMOTION_COORDS: dict[str, tuple[float, float]] = {
     "Happy":    (0.80, 0.80),
     "Surprise": (0.60, 0.85),
@@ -30,24 +29,68 @@ EMOTION_COORDS: dict[str, tuple[float, float]] = {
 }
 
 
-def build_spotify_url(track_id: str) -> str:
+def spotify_url(track_id: str) -> str:
     return f"https://open.spotify.com/track/{track_id}"
 
 
-def find_nearest_song(df: pd.DataFrame, v_target: float, e_target: float, exclude_ids: list) -> pd.Series:
-    # TODO: filter excluded, compute Euclidean distance, return closest row
-    pass
+def find_nearest_song(
+    df: pd.DataFrame,
+    v_target: float,
+    e_target: float,
+    exclude_ids: list[str],
+) -> dict:
+    candidates = df[~df["track_id"].isin(exclude_ids)].copy()
+    candidates["dist"] = np.sqrt(
+        (candidates["valence"] - v_target) ** 2 +
+        (candidates["energy"] - e_target) ** 2
+    )
+    row = candidates.nsmallest(1, "dist").iloc[0]
+    return {
+        "track_name":   row["track_name"],
+        "artists":      row["artists"],
+        "emotion":      row["emotion"],
+        "valence":      round(float(row["valence"]), 3),
+        "energy":       round(float(row["energy"]), 3),
+        "track_id":     row["track_id"],
+        "spotify_url":  spotify_url(row["track_id"]),
+    }
 
 
 def recommend(emotion: str, df: pd.DataFrame) -> list[dict]:
-    # TODO: compute 3 waypoints, call find_nearest_song for each, build result dicts
-    pass
+    if emotion not in EMOTION_COORDS:
+        emotion = "Sad"  # safe default
+
+    cv, ce = EMOTION_COORDS[emotion]
+
+    waypoints = [
+        (cv, ce),                                          # match current mood
+        ((cv + TARGET_VALENCE) / 2, (ce + TARGET_ENERGY) / 2),  # bridge
+        (TARGET_VALENCE, TARGET_ENERGY),                   # destination: Happy
+    ]
+
+    songs = []
+    used_ids: list[str] = []
+    for v, e in waypoints:
+        song = find_nearest_song(df, v, e, used_ids)
+        songs.append(song)
+        used_ids.append(song["track_id"])
+
+    return songs
 
 
 if __name__ == "__main__":
     df = pd.read_csv("data/processed/dataset_labeled.csv")
-    songs = recommend("Sad", df)
-    for i, song in enumerate(songs, 1):
-        print(f"\nSong {i}: {song['track_name']} — {song['artists']}")
-        print(f"  Emotion: {song['emotion']} | Valence: {song['valence']:.2f} | Energy: {song['energy']:.2f}")
-        print(f"  {song['spotify_url']}")
+
+    test_emotions = ["Sad", "Angry", "Fear", "Happy"]
+    for emotion in test_emotions:
+        print(f"\n{'─' * 52}")
+        print(f"  Starting from: {emotion}")
+        print(f"{'─' * 52}")
+        songs = recommend(emotion, df)
+        labels = ["Matching your mood", "The bridge", "Your destination"]
+        for song, label in zip(songs, labels):
+            print(f"\n  [{label}]")
+            print(f"    {song['track_name']} — {song['artists']}")
+            print(f"    Emotion: {song['emotion']}  |  "
+                  f"Valence: {song['valence']}  |  Energy: {song['energy']}")
+            print(f"    {song['spotify_url']}")
