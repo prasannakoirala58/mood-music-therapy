@@ -40,6 +40,11 @@ env/
 .ipynb_checkpoints/
 *.ipynb
 
+# ── Node / React ─────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
 # ── Librosa demo audio files ──────────────────────────────
 backend/demo/*.mp3
 backend/demo/*.wav

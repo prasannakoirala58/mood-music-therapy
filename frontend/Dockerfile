@@ -1,16 +1,13 @@
-FROM python:3.11-slim
-
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY pyproject.toml .
+COPY package.json ./
 
-RUN uv sync --no-install-project
+RUN npm install
 
 COPY . .
 
-EXPOSE 8501
+EXPOSE 5173
 
-CMD ["uv", "run", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["npm", "run", "dev"]
