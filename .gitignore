@@ -36,6 +36,9 @@ env/
 *.swp
 *.swo
 
+# ── Claude Code (local tool — not part of the project) ────
+.claude/
+
 # ── Jupyter ───────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb

@@ -43,8 +43,20 @@ train: label ## Step 2 — train RF + MLP models → .pkl files (also runs label
 run: ## Run the CLI conversation app (models must exist — run 'make train' first)
 	cd $(BACKEND_DIR) && uv run python src/pipeline.py
 
+.PHONY: api
+api: ## Start the FastAPI backend on port 8000 (hot-reload, models must exist)
+	cd $(BACKEND_DIR) && uv run uvicorn src.api:app --reload --port 8000
+
+.PHONY: frontend
+frontend: ## Start the React + Vite dev server on port 5173
+	cd frontend && npm run dev
+
+.PHONY: typecheck
+typecheck: ## Run TypeScript strict type-check on the frontend
+	cd frontend && npm run typecheck
+
 .PHONY: start
-start: ## Smart start — trains models if missing, then runs the app
+start: ## Smart start — trains models if missing, then runs the CLI app
 	@if [ ! -f $(BACKEND_DIR)/models/emotion_classifier_rf.pkl ]; then \
 		echo ""; \
 		echo "  First run detected — setting up models..."; \

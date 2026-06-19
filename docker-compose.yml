@@ -1,27 +1,44 @@
 version: "3.11"
 
+# Single command to start the full stack:
+#   docker compose up --build
+#
+# Services:
+#   backend-api  → FastAPI on port 8000  (React calls this)
+#   frontend     → React + Vite on port 5173
+#
+# The CLI pipeline (make run) is intentionally NOT in here —
+# it's interactive and needs a real terminal, not a container.
+
 services:
-  backend:
+  backend-api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     volumes:
-      # Persist data and models outside the container
+      # Models and data live outside the container so retraining persists
       - ./backend/data:/app/data
       - ./backend/models:/app/models
     env_file:
       - .env
-    # Keep stdin open for the interactive CLI pipeline
-    stdin_open: true
-    tty: true
+    command: uv run uvicorn src.api:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8501:8501"
+      - "5173:5173"
     depends_on:
-      - backend
-    env_file:
-      - .env
+      backend-api:
+        condition: service_healthy
+    environment:
+      # Vite needs this at build-time in Docker — points to the API container
+      - VITE_API_URL=http://localhost:8000

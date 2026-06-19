@@ -8,6 +8,9 @@ Cost: ~$0.0001 per call (10 output tokens max at GPT-4o-mini pricing).
 """
 
 import os
+import time
+
+from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -29,6 +32,9 @@ Rules:
 def parse_mood(user_text: str) -> str:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+    logger.info(f"[MOOD] parsing: '{user_text[:80]}{'...' if len(user_text) > 80 else ''}'")
+
+    t0 = time.perf_counter()
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=10,
@@ -38,17 +44,17 @@ def parse_mood(user_text: str) -> str:
             {"role": "user", "content": user_text},
         ],
     )
+    elapsed_ms = (time.perf_counter() - t0) * 1000
 
-    label = response.choices[0].message.content.strip()
-
-    # Normalise capitalisation in case the model returns "sad" instead of "Sad"
-    label = label.capitalize()
+    raw = response.choices[0].message.content.strip()
+    label = raw.capitalize()
 
     if label not in VALID_EMOTIONS:
         # Fallback: if model somehow returns something unexpected, default to Sad
-        # (low-energy, low-valence is the safest neutral fallback for a therapy app)
+        logger.warning(f"[MOOD] unexpected label from GPT: {raw!r} — defaulting to Sad")
         return "Sad"
 
+    logger.info(f"[MOOD] '{label}' ({elapsed_ms:.0f}ms)")
     return label
 
 

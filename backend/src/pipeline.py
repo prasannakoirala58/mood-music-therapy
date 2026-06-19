@@ -8,12 +8,14 @@ Run with:  uv run python src/pipeline.py
 """
 
 import sys
+import joblib
 import pandas as pd
 from pathlib import Path
 from mood_parser import parse_mood
 from recommender import recommend
 
 DATASET_PATH = Path("data/processed/dataset_labeled.csv")
+MODELS_DIR   = Path("models")
 
 BANNER = """
 ╔══════════════════════════════════════════════════╗
@@ -56,14 +58,20 @@ def print_songs(emotion: str, songs: list[dict]) -> None:
 def run() -> None:
     print(BANNER)
 
-    if not DATASET_PATH.exists():
-        print("  Error: labeled dataset not found.")
-        print("  Run 'make train' first to set up the data pipeline.")
-        sys.exit(1)
+    for path, label in [(DATASET_PATH, "dataset"), (MODELS_DIR / "emotion_classifier_mlp.pkl", "MLP model")]:
+        if not path.exists():
+            print(f"  Error: {label} not found.")
+            print("  Run 'make train' first to set up the data pipeline.")
+            sys.exit(1)
 
     print("  Loading song database...", end=" ", flush=True)
     df = pd.read_csv(DATASET_PATH)
-    print(f"done  ({len(df):,} songs)\n")
+    print(f"done  ({len(df):,} songs)")
+
+    print("  Loading MLP neural network...", end=" ", flush=True)
+    mlp = joblib.load(MODELS_DIR / "emotion_classifier_mlp.pkl")
+    le  = joblib.load(MODELS_DIR / "genre_label_encoder.pkl")
+    print("done\n")
 
     while True:
         print("  How are you feeling right now?")
@@ -81,7 +89,7 @@ def run() -> None:
 
         print("\n  Detecting your mood...", end=" ", flush=True)
         emotion = parse_mood(user_input)
-        songs = recommend(emotion, df)
+        songs = recommend(emotion, df, mlp_model=mlp, genre_encoder=le)
         print("done\n")
 
         print_songs(emotion, songs)
@@ -99,7 +107,7 @@ def run() -> None:
         print("\n  Let's try another set.\n")
         print("  Detecting your mood...", end=" ", flush=True)
         emotion2 = parse_mood(follow_up)
-        songs2 = recommend(emotion2, df)
+        songs2 = recommend(emotion2, df, mlp_model=mlp, genre_encoder=le)
         print("done\n")
 
         print_songs(emotion2, songs2)

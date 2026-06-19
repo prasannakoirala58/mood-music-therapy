@@ -1,18 +1,36 @@
-# Music Mood Therapy 🎵
+# Music Mood Therapy
 
-A mood-to-music recommendation engine built on the **ISO Principle** from clinical music therapy.
+A mood-to-music recommendation engine grounded in clinical music therapy and machine learning.
 
-> Tell me how you feel. I'll walk you through 3 songs from where you are to somewhere better.
+> Tell me how you feel. I'll find three songs that move you from where you are to somewhere better.
 
 ---
 
-## What It Does
+## How It Works
 
-1. You describe your mood in natural language
-2. GPT-4o-mini classifies your emotion into one of 6 categories
-3. The ISO engine calculates a 3-song emotional journey toward Happy
-4. You get 3 real Spotify-linked songs — one matching your mood, one bridging, one at the destination
-5. After listening, tell the app how you feel — it loops with a fresh set if needed
+The system applies the **ISO Principle** from clinical music therapy: you cannot jump from sad to happy — the emotional gap creates dissonance. Instead, music therapy starts by *matching* the listener's current state, then *bridges*, then arrives at the *destination*.
+
+```
+You type:  "I feel completely empty and hopeless"
+
+Step 1 — OpenAI GPT-4o-mini classifies your mood
+         → "Sad"
+
+Step 2 — ISO engine maps "Sad" to coordinates on Russell's Circumplex Model
+         → (valence=0.20, energy=0.20)
+         → Calculates 3 waypoints toward Happy (0.80, 0.80)
+
+Step 3 — Nearest-neighbour search across 89,740 Spotify tracks
+         → Finds the closest song to each waypoint
+
+Step 4 — MLP neural network classifies each song live
+         → Predicts emotion from its 8 audio features in real time
+
+Step 5 — You get three songs + Spotify links:
+         [1] matching your mood   — meets you where you are
+         [2] the bridge           — starts shifting the energy
+         [3] your destination     — where you're headed
+```
 
 ---
 
@@ -22,21 +40,29 @@ A mood-to-music recommendation engine built on the **ISO Principle** from clinic
 |---------|--------|
 | ISO Principle | Clinical music therapy — match emotional state before guiding |
 | Russell's Circumplex Model | Russell (1980) — 2D emotion space: valence × arousal |
-| Emotion labels | Ekman's 6 basic emotions |
-| Feature extraction | Spotify audio features: valence, energy, tempo, mode, danceability, loudness, acousticness, genre |
+| Ekman's 6 basic emotions | Happy, Sad, Angry, Fear, Disgust, Surprise |
+| Audio features | Spotify pre-extracted: valence, energy, tempo, mode, danceability, loudness, acousticness, genre |
 
 ---
 
 ## ML Architecture
 
-Two classifiers trained on 114k labeled Spotify tracks:
+Two classifiers trained on 89,740 labeled Spotify tracks. Both answer the same question: **"Given these 8 audio features, what emotion is this song?"**
 
 ```
-Random Forest (baseline)   — 100 decision trees, feature importance analysis
-MLP Neural Network         — 128→64 hidden layers, ReLU, backpropagation, early stopping
+Random Forest (baseline)
+  100 decision trees · class_weight='balanced' · feature importance chart
+  Accuracy: 100% (expected — label circularity, acknowledged limitation)
+
+MLP Neural Network  ← used live in recommendations
+  Input: 8 features
+  Hidden: 128 → 64 neurons (ReLU)
+  Output: 6 emotions (softmax)
+  StandardScaler + early_stopping
+  Accuracy: 99.26% · converged at iteration 39
 ```
 
-Both trained on 8 audio features. Accuracy compared side-by-side.
+The MLP runs on every recommendation request — song emotion labels you see in the app are live neural network predictions, not pre-assigned tags.
 
 ---
 
@@ -45,41 +71,57 @@ Both trained on 8 audio features. Accuracy compared side-by-side.
 ### Prerequisites
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Docker Desktop
+- Node 20+
+- Docker Desktop (optional, for containerised run)
 - OpenAI API key
 
 ### 1. Clone and configure
 ```bash
 git clone git@github.com:prasannakoirala58/mood-music-therapy.git
-cd mood-music-therapy
+cd music-therapy
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Add your OPENAI_API_KEY to .env
 ```
 
-### 2. Download dataset
-Get `dataset.csv` from [Kaggle](https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset)
-and place it at `backend/data/raw/dataset.csv`
+### 2. Get the dataset
+Download `dataset.csv` from [Kaggle — Spotify Tracks Dataset](https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset) and place it at:
+```
+backend/data/raw/dataset.csv
+```
 
-### 3. Install dependencies
+### 3. Install backend dependencies
 ```bash
 cd backend && uv sync
 ```
 
-### 4. Run the data pipeline (one-time setup)
+### 4. Train the models (one-time, ~5 minutes)
 ```bash
-uv run python src/label_emotions.py      # Labels 114k songs with emotions
-uv run python src/train_classifier.py    # Trains RF + MLP, prints accuracy
+make train
+# Labels 89k songs with emotions
+# Trains Random Forest + MLP neural network
+# Saves .pkl files to backend/models/
 ```
 
-### 5. Run the app
+### 5. Run
+
+**Web app (recommended):**
 ```bash
-uv run python src/pipeline.py            # Start the CLI conversation
+# Terminal 1
+make api        # FastAPI backend on http://localhost:8000
+
+# Terminal 2
+make frontend   # React frontend on http://localhost:5173
+```
+Open `http://localhost:5173` in your browser.
+
+**CLI:**
+```bash
+make run        # or: make start (trains first if models are missing)
 ```
 
-### Or run everything via Docker
+**Full stack via Docker:**
 ```bash
-docker-compose up --build
-docker-compose run backend               # Interactive CLI
+docker compose up --build
 ```
 
 ---
@@ -87,30 +129,62 @@ docker-compose run backend               # Interactive CLI
 ## Project Structure
 
 ```
-mood-music-therapy/
+music-therapy/
 ├── backend/
 │   ├── src/
-│   │   ├── label_emotions.py    ← Rule-based emotion labeling
-│   │   ├── train_classifier.py  ← RF + MLP training
-│   │   ├── mood_parser.py       ← OpenAI mood classification
-│   │   ├── recommender.py       ← ISO principle engine
-│   │   └── pipeline.py          ← CLI conversation loop
-│   ├── data/raw/                ← dataset.csv (not committed)
-│   ├── data/processed/          ← dataset_labeled.csv (generated)
-│   ├── models/                  ← .pkl model files (generated)
-│   └── demo/librosa_demo.py     ← Raw audio demo
-├── frontend/                    ← Streamlit UI (Phase 5)
+│   │   ├── label_emotions.py     ← Rule-based emotion labeling
+│   │   ├── train_classifier.py   ← Trains RF + MLP, prints comparison
+│   │   ├── mood_parser.py        ← OpenAI: text → emotion label
+│   │   ├── recommender.py        ← ISO engine + live MLP inference
+│   │   ├── pipeline.py           ← CLI conversation loop
+│   │   └── api.py                ← FastAPI REST server
+│   ├── data/raw/                 ← dataset.csv (not committed, 20MB)
+│   ├── data/processed/           ← dataset_labeled.csv (generated)
+│   ├── models/                   ← .pkl files (generated)
+│   └── demo/librosa_demo.py      ← Raw audio demo
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   │   ├── MoodInput.tsx     ← Input form
+│   │   │   ├── ResultsPanel.tsx  ← 3-card results
+│   │   │   ├── SongCard.tsx      ← Song card + Spotify button
+│   │   │   └── ResonanceMap.tsx  ← SVG: song position on Circumplex
+│   │   ├── hooks/useRecommend.ts ← API calls
+│   │   └── lib/emotions.ts       ← Emotion colours + metadata
+│   └── ...
+│
+├── Makefile                      ← All commands live here
 ├── docker-compose.yml
-└── ROADMAP.md                   ← Full system design
+└── ROADMAP.md                    ← Full system design + defense talking points
+```
+
+---
+
+## Makefile Commands
+
+```bash
+make install    # Install backend Python deps
+make train      # Label data + train both models (run once)
+make run        # Run the CLI app
+make start      # Smart: trains if missing, then runs CLI
+make api        # Start FastAPI server on :8000
+make frontend   # Start React dev server on :5173
+make typecheck  # TypeScript strict type-check
+make demo FILE= # Librosa audio demo: make demo FILE=song.mp3
+make clean      # Remove generated data + models (forces retrain)
+make help       # Show all commands
 ```
 
 ---
 
 ## Built With
 
-- Python 3.11 · uv · Docker
-- scikit-learn (RandomForest, MLPClassifier)
-- OpenAI GPT-4o-mini
-- librosa · pandas · numpy
-- Streamlit (Phase 5)
-- Kaggle Spotify Tracks Dataset (maharshipandya)
+**Backend:** Python 3.11 · uv · FastAPI · scikit-learn · OpenAI · librosa · pandas · numpy · joblib · loguru
+
+**Frontend:** React 18 · TypeScript · Tailwind CSS · Vite · framer-motion
+
+**Infrastructure:** Docker · docker-compose
+
+**Dataset:** [Kaggle — Spotify Tracks Dataset](https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset) by maharshipandya (114k tracks, 125 genres)
