@@ -93,7 +93,7 @@ prepare-api: ## Generate missing processed CSV/model files needed by the API whe
 	@if [ ! -f $(BACKEND_DIR)/data/processed/nepali_dataset.csv ]; then \
 		echo ""; \
 		echo "  nepali_dataset.csv is required but missing."; \
-		echo "  Run 'make collect' on the host machine before starting Docker Compose."; \
+		echo "  Obtain it from the project maintainer or run 'make collect' on the host machine first."; \
 		echo "  docker compose up can only auto-prepare files that are derivable locally."; \
 		echo ""; \
 		exit 1; \
@@ -107,7 +107,7 @@ prepare-api: ## Generate missing processed CSV/model files needed by the API whe
 	fi
 
 .PHONY: api
-api: prepare-api ## Start the FastAPI backend on port 8000 (hot-reload, prepares data/models first)
+api: prepare-api ## Start the FastAPI backend on port 8000 (host run has hot-reload; prepares data/models first)
 	cd $(BACKEND_DIR) && uv run uvicorn src.api:app --reload --port 8000
 
 .PHONY: frontend
