@@ -19,5 +19,6 @@ WORKDIR /app
 COPY Makefile ./Makefile
 COPY backend ./backend
 
-# Default: run the CLI pipeline
+# Default standalone container behavior: run the CLI pipeline.
+# docker-compose overrides this with `make api` for the web backend.
 CMD ["make", "run"]
