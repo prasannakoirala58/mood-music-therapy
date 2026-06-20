@@ -94,7 +94,7 @@ prepare-api: ## Generate missing processed CSV/model files needed by the API whe
 		echo ""; \
 		echo "  nepali_dataset.csv is required but missing."; \
 		echo "  Obtain it from the project maintainer or generate it on the host before startup."; \
-		echo "  Docker cannot reliably run 'make collect' for you because that step is environment-dependent."; \
+		echo "  The collection step is environment-dependent, so startup cannot reliably run it for you."; \
 		echo "  This startup step can only auto-prepare files that are derivable locally."; \
 		echo ""; \
 		exit 1; \
@@ -108,7 +108,7 @@ prepare-api: ## Generate missing processed CSV/model files needed by the API whe
 	fi
 
 .PHONY: api
-api: prepare-api ## Start the FastAPI backend on port 8000 (reload helps when source files are visible; prepares data/models first)
+api: prepare-api ## Start the FastAPI backend on port 8000 (reload supports dev hot-reload; prepares data/models first)
 	cd $(BACKEND_DIR) && uv run uvicorn src.api:app --reload --port 8000
 
 .PHONY: frontend
