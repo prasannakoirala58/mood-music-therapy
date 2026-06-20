@@ -92,8 +92,8 @@ prepare-api: ## Generate missing processed CSV/model files needed by the API whe
 	fi
 	@if [ ! -f $(BACKEND_DIR)/data/processed/nepali_dataset.csv ]; then \
 		echo ""; \
-		echo "  nepali_dataset.csv not found."; \
-		echo "  Run 'make collect' on the host first so the API has its production dataset."; \
+		echo "  nepali_dataset.csv is required but missing."; \
+		echo "  Run 'make collect' on the host machine before starting Docker Compose."; \
 		echo "  docker compose up can only auto-prepare files that are derivable locally."; \
 		echo ""; \
 		exit 1; \
