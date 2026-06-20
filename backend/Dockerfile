@@ -15,7 +15,8 @@ COPY backend/pyproject.toml backend/uv.lock ./
 # Install dependencies (skip installing the project itself — we run src directly)
 RUN uv sync --no-install-project
 
-# Copy the root Makefile plus backend source so Docker can start the API through make
+# Switch back to the repo root so the image can use the root Makefile at runtime.
+# Dependency installation already happened inside /app/backend where pyproject.toml lives.
 WORKDIR /app
 COPY Makefile ./Makefile
 COPY backend ./backend
