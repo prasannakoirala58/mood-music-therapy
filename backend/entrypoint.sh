@@ -13,12 +13,5 @@ if [ ! -f "$DATASET" ]; then
     exit 1
 fi
 
-if [ ! -f "$MODEL" ]; then
-    echo ""
-    echo "  Models not found — training now (~1 minute)..."
-    echo ""
-    cd /app && uv run python src/train_classifier.py
-    echo ""
-fi
 
 exec "$@"

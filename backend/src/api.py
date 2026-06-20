@@ -43,11 +43,13 @@ logger.add(
     colorize=True,
 )
 
+
 # ── Silence uvicorn's /health access log lines ────────────────────────────────
 # Docker healthcheck fires every 10s — no value in logging it.
 class _HealthFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return "GET /health" not in record.getMessage()
+
 
 logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
 
@@ -65,30 +67,13 @@ app.add_middleware(
 )
 
 DATASET_PATH = Path(__file__).parent.parent / "data/processed/nepali_dataset.csv"
-MLP_PATH     = Path(__file__).parent.parent / "models/emotion_classifier_mlp_nepali.pkl"
+MLP_PATH = Path(__file__).parent.parent / "models/emotion_classifier_mlp_nepali.pkl"
 
 ALLOWED_AUDIO = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
 
 
-@app.on_event("startup")
-async def load_resources() -> None:
-    for path in (DATASET_PATH, MLP_PATH):
-        if not path.exists():
-            logger.error(f"Required file not found: {path}")
-            raise RuntimeError(
-                f"Required file not found: {path}\n"
-                "Run 'make train' from the project root first."
-            )
-
-    app.state.df  = pd.read_csv(DATASET_PATH)
-    app.state.mlp = joblib.load(MLP_PATH)
-
-    logger.success(f"Dataset loaded    {len(app.state.df):,} songs")
-    logger.success(f"MLP loaded        {MLP_PATH.name}")
-    logger.success("API ready ─────── :8000")
-
-
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class MoodRequest(BaseModel):
     text: str
@@ -96,25 +81,26 @@ class MoodRequest(BaseModel):
 
 class Song(BaseModel):
     track_name: str
-    artists:    str
-    emotion:    str
-    valence:    float
-    energy:     float
-    track_id:   str
+    artists: str
+    emotion: str
+    valence: float
+    energy: float
+    track_id: str
     spotify_url: str
 
 
 class RecommendResponse(BaseModel):
     emotion: str
-    songs:   list[Song]
+    songs: list[Song]
 
 
 class ClassifyResponse(BaseModel):
-    predictions: dict[str, float]   # emotion → probability (all 6, sum to 1.0)
-    top_emotion: str                 # highest probability emotion
+    predictions: dict[str, float]  # emotion → probability (all 6, sum to 1.0)
+    top_emotion: str  # highest probability emotion
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @app.post("/api/recommend", response_model=RecommendResponse)
 async def recommend_songs(req: MoodRequest, request: Request) -> RecommendResponse:
@@ -122,12 +108,14 @@ async def recommend_songs(req: MoodRequest, request: Request) -> RecommendRespon
         raise HTTPException(status_code=422, detail="Mood text cannot be empty.")
 
     client = request.client.host if request.client else "unknown"
-    logger.info(f"▶ recommend  '{req.text[:60]}{'…' if len(req.text) > 60 else ''}'  [{client}]")
+    logger.info(
+        f"▶ recommend  '{req.text[:60]}{'…' if len(req.text) > 60 else ''}'  [{client}]"
+    )
 
     t0 = time.perf_counter()
 
     emotion = parse_mood(req.text)
-    songs   = recommend(emotion, app.state.df, mlp_model=app.state.mlp)
+    songs = recommend(emotion, app.state.df, mlp_model=app.state.mlp)
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.success(f"✓ recommend  {emotion} → {len(songs)} songs  ({elapsed_ms:.0f}ms)")
@@ -141,7 +129,7 @@ async def classify_song(file: UploadFile = File(...)) -> ClassifyResponse:
     if suffix not in ALLOWED_AUDIO:
         raise HTTPException(
             status_code=422,
-            detail=f"Unsupported file type '{suffix}'. Allowed: {', '.join(ALLOWED_AUDIO)}"
+            detail=f"Unsupported file type '{suffix}'. Allowed: {', '.join(ALLOWED_AUDIO)}",
         )
 
     logger.info(f"▶ classify   '{file.filename}'")
@@ -158,18 +146,21 @@ async def classify_song(file: UploadFile = File(...)) -> ClassifyResponse:
         Path(tmp_path).unlink(missing_ok=True)
 
     if predictions is None:
-        raise HTTPException(status_code=422, detail="Could not extract audio features. Is the file a valid audio file?")
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract audio features. Is the file a valid audio file?",
+        )
 
     top_emotion = max(predictions, key=lambda k: predictions[k])
-    elapsed_ms  = (time.perf_counter() - t0) * 1000
+    elapsed_ms = (time.perf_counter() - t0) * 1000
 
-    logger.success(f"✓ classify   {top_emotion} ({predictions[top_emotion]:.0%})  ({elapsed_ms:.0f}ms)")
+    logger.success(
+        f"✓ classify   {top_emotion} ({predictions[top_emotion]:.0%})  ({elapsed_ms:.0f}ms)"
+    )
 
     return ClassifyResponse(predictions=predictions, top_emotion=top_emotion)
 
 
 @app.get("/health")
 async def health() -> dict:
-    songs_loaded = len(app.state.df) if hasattr(app.state, "df") else 0
-    model_status = "MLP loaded" if hasattr(app.state, "mlp") else "not loaded"
-    return {"status": "ok", "songs_loaded": songs_loaded, "model": model_status}
+    return {"status": "ok"}
