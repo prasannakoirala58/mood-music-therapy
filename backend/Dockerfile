@@ -14,5 +14,9 @@ RUN uv sync --no-install-project
 # Copy all source code
 COPY . .
 
-# Default: run the CLI pipeline
-CMD ["uv", "run", "python", "src/pipeline.py"]
+# entrypoint: trains models on first run if missing, then execs the CMD
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["uv", "run", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]

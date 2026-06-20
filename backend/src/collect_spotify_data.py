@@ -1,22 +1,21 @@
 """
 collect_spotify_data.py
 
-Pulls Nepali emotion playlists from Spotify, downloads each song's
-30-second preview, extracts audio features with librosa, and saves
-a labeled CSV ready for model training.
+Pulls Nepali emotion playlists from Spotify, downloads each song via yt-dlp,
+extracts audio features with librosa, and saves a labeled CSV ready for training.
 
-Why librosa and not Spotify's audio-features API?
-Spotify deprecated GET /v1/audio-features for new apps in late 2024.
-We compute equivalent features ourselves from the audio preview.
+Uses Client Credentials auth — no browser login needed, just CLIENT_ID + CLIENT_SECRET.
+Playlists must be PUBLIC on Spotify for this to work.
 
-Run (test 5 songs from one playlist):
+Run all six playlists:
   cd backend
-  uv run python src/collect_spotify_data.py Happy --limit 5
-
-Run all six playlists fully:
   uv run python src/collect_spotify_data.py
 
-Requires http://127.0.0.1:3000 in your Spotify app's Redirect URIs.
+Run one playlist only:
+  uv run python src/collect_spotify_data.py Sad
+
+Test with first 5 songs:
+  uv run python src/collect_spotify_data.py Happy --limit 5
 """
 
 import os
@@ -32,74 +31,45 @@ import pandas as pd
 import spotipy
 from dotenv import load_dotenv
 from loguru import logger
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyClientCredentials
 
 from common.features import extract_features as _extract_from_file
 
 load_dotenv()
 
-# ── Config ────────────────────────────────────────────────────────────────────
+OUTPUT_PATH = Path(__file__).parent.parent / "data/processed/nepali_dataset.csv"
 
-REDIRECT_URI = "http://127.0.0.1:3000"
-SCOPE        = "playlist-read-private playlist-read-collaborative"
-CACHE_PATH   = Path(__file__).parent.parent / ".spotify_cache"
-OUTPUT_PATH  = Path(__file__).parent.parent / "data/processed/nepali_dataset.csv"
-
-EMOTION_PLAYLIST_NAMES = {
-    "Happy":    "Songs - Happy",
-    "Sad":      "Songs - Sad",
-    "Angry":    "Songs - Angry",
-    "Fear":     "Songs - Fear",
-    "Disgust":  "Songs - Disgust",
-    "Surprise": "Songs - Surprise",
+# Hardcoded public playlist IDs — update here if playlists change
+EMOTION_PLAYLISTS = {
+    "Happy":    "4NOiv5VZilzp3VGrFtmReS",
+    "Sad":      "2hheZ7P3hLFbkKPURCiZL4",
+    "Angry":    "0s2cQ9t6YHoYt0kO8LkhK7",
+    "Fear":     "4yhfOLud5ZqT1Zmaoe4P3c",
+    "Disgust":  "1V04P09w7AobPtKicvMXwi",
+    "Surprise": "0fJxnP7fkoYyVP9uUcvAA1",
 }
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
 
 def get_client() -> spotipy.Spotify:
-    return spotipy.Spotify(auth_manager=SpotifyOAuth(
+    return spotipy.Spotify(auth_manager=SpotifyClientCredentials(
         client_id=os.getenv("CLIENT_ID"),
         client_secret=os.getenv("CLIENT_SECRET"),
-        redirect_uri=REDIRECT_URI,
-        scope=SCOPE,
-        cache_path=str(CACHE_PATH),
-        open_browser=True,
     ))
 
 
-# ── Playlist discovery ────────────────────────────────────────────────────────
-
-def find_emotion_playlists(sp: spotipy.Spotify) -> dict[str, str]:
-    found: dict[str, str] = {}
-    results = sp.current_user_playlists(limit=50)
-    while results:
-        for item in results["items"]:
-            name = item["name"].strip()
-            for emotion, expected in EMOTION_PLAYLIST_NAMES.items():
-                if name == expected:
-                    found[emotion] = item["id"]
-                    logger.info(f"  Found: '{name}' → {emotion}")
-        results = sp.next(results) if results["next"] else None
-    return found
-
-
-# ── Track collection ──────────────────────────────────────────────────────────
-
 def get_playlist_tracks(sp: spotipy.Spotify, playlist_id: str, limit: int | None = None) -> list[dict]:
-    """Return list of {id, name, artists, preview_url} for each track."""
     tracks: list[dict] = []
     results = sp.playlist_tracks(playlist_id)
 
     while results:
         for item in results["items"]:
-            track = item.get("item") or item.get("track")
+            track = item.get("track")
             if not track or not track.get("id"):
                 continue
             tracks.append({
-                "id":          track["id"],
-                "name":        track["name"],
-                "artists":     ", ".join(a["name"] for a in track.get("artists", [])),
-                "preview_url": track.get("preview_url"),
+                "id":      track["id"],
+                "name":    track["name"],
+                "artists": ", ".join(a["name"] for a in track.get("artists", [])),
             })
             if limit and len(tracks) >= limit:
                 return tracks
@@ -108,13 +78,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_id: str, limit: int | None
     return tracks
 
 
-# ── Audio feature extraction ──────────────────────────────────────────────────
-
-def extract_features(track_name: str, artists: str) -> dict | None:
-    """
-    Search YouTube for the song, download full audio, extract features via common/features.py.
-    Temp directory is deleted automatically after processing.
-    """
+def download_and_extract(track_name: str, artists: str) -> dict | None:
     query = f"{track_name} {artists}"
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -133,41 +97,32 @@ def extract_features(track_name: str, artists: str) -> dict | None:
             return _extract_from_file(str(mp3_files[0]))
 
     except Exception as e:
-        logger.warning(f"  Download/load failed: {e}")
+        logger.warning(f"  Download/extract failed: {e}")
         return None
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def collect(emotions: list[str] | None = None, limit: int | None = None) -> pd.DataFrame:
     sp = get_client()
 
-    # Load already-processed track IDs so we skip re-downloading them.
-    # This makes the command incremental: only new songs added to Spotify get downloaded.
+    # Load already-processed track IDs — only download new songs
     already_done: set[str] = set()
     if OUTPUT_PATH.exists():
         already_done = set(pd.read_csv(OUTPUT_PATH)["track_id"].astype(str))
-        logger.info(f"Existing dataset: {len(already_done)} songs — will skip these")
+        logger.info(f"Existing dataset: {len(already_done)} songs — skipping those")
 
-    logger.info("Discovering emotion playlists…")
-    playlist_map = find_emotion_playlists(sp)
-
-    target_emotions = emotions or list(EMOTION_PLAYLIST_NAMES.keys())
+    target_emotions = emotions or list(EMOTION_PLAYLISTS.keys())
     rows: list[dict] = []
 
     for emotion in target_emotions:
-        if emotion not in playlist_map:
-            logger.warning(f"Skipping {emotion} — playlist not found")
-            continue
+        playlist_id = EMOTION_PLAYLISTS[emotion]
+        logger.info(f"\n[{emotion}] Fetching playlist {playlist_id}…")
 
-        logger.info(f"\n[{emotion}] Fetching tracks…")
-        tracks = get_playlist_tracks(sp, playlist_map[emotion], limit=limit)
-
+        tracks    = get_playlist_tracks(sp, playlist_id, limit=limit)
         new_tracks = [t for t in tracks if t["id"] not in already_done]
-        skipped    = len(tracks) - len(new_tracks)
+        skipped   = len(tracks) - len(new_tracks)
 
         if skipped:
-            logger.info(f"[{emotion}] {len(tracks)} in playlist — {skipped} already processed, {len(new_tracks)} new")
+            logger.info(f"[{emotion}] {len(tracks)} in playlist — {skipped} already done, {len(new_tracks)} new")
         else:
             logger.info(f"[{emotion}] {len(new_tracks)} new tracks to process")
 
@@ -175,13 +130,11 @@ def collect(emotions: list[str] | None = None, limit: int | None = None) -> pd.D
             continue
 
         for i, track in enumerate(new_tracks):
-            name = track["name"]
-
-            logger.info(f"  [{i+1}/{len(new_tracks)}] '{name}' by {track['artists']}")
-            features = extract_features(name, track["artists"])
+            logger.info(f"  [{i+1}/{len(new_tracks)}] '{track['name']}' by {track['artists']}")
+            features = download_and_extract(track["name"], track["artists"])
 
             if not features:
-                logger.warning(f"  └─ feature extraction failed, skipping")
+                logger.warning(f"  └─ skipped (feature extraction failed)")
                 continue
 
             logger.info(
@@ -191,7 +144,7 @@ def collect(emotions: list[str] | None = None, limit: int | None = None) -> pd.D
 
             rows.append({
                 "track_id":   track["id"],
-                "track_name": name,
+                "track_name": track["name"],
                 "artists":    track["artists"],
                 "emotion":    emotion,
                 **features,
@@ -200,7 +153,7 @@ def collect(emotions: list[str] | None = None, limit: int | None = None) -> pd.D
             time.sleep(0.05)
 
     if not rows:
-        logger.info("No new songs to add.")
+        logger.info("No new songs found across all playlists.")
         return pd.DataFrame()
 
     df = pd.DataFrame(rows).drop_duplicates(subset="track_id")
@@ -211,11 +164,6 @@ def collect(emotions: list[str] | None = None, limit: int | None = None) -> pd.D
 
 
 if __name__ == "__main__":
-    # Usage:
-    #   uv run python src/collect_spotify_data.py                  → all 6 playlists
-    #   uv run python src/collect_spotify_data.py Happy            → one playlist
-    #   uv run python src/collect_spotify_data.py Happy --limit 5  → first 5 songs only
-
     emotions = None
     limit    = None
 
@@ -228,19 +176,16 @@ if __name__ == "__main__":
 
     df = collect(emotions=emotions, limit=limit)
 
-    if df.empty:
-        logger.error("No data collected.")
-        sys.exit(1)
-
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # Merge with existing data so running one playlist at a time doesn't wipe others
+    if df.empty:
+        logger.info("Nothing new to save.")
+        sys.exit(0)
+
     if OUTPUT_PATH.exists():
         existing = pd.read_csv(OUTPUT_PATH)
         df = pd.concat([existing, df], ignore_index=True).drop_duplicates(subset="track_id")
-        logger.info(f"Merged with existing data → {len(df)} total tracks")
+        logger.info(f"Merged → {len(df)} total tracks")
 
     df.to_csv(OUTPUT_PATH, index=False)
-    logger.success(f"\nSaved → {OUTPUT_PATH}  ({len(df)} tracks)")
-    logger.info("\nSample rows:")
-    print(df[["track_name", "artists", "emotion", "valence", "energy", "tempo", "mode"]].head(5).to_string(index=False))
+    logger.success(f"Saved → {OUTPUT_PATH}  ({len(df)} tracks)")
