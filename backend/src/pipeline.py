@@ -1,7 +1,7 @@
 """
 pipeline.py
 
-Main entry point — conversational CLI mood-to-music journey.
+Conversational CLI mood-to-music journey using the Nepali dataset.
 
 Run with:  uv run python src/pipeline.py
        or: make run  (from project root)
@@ -11,10 +11,13 @@ import sys
 import joblib
 import pandas as pd
 from pathlib import Path
-from mood_parser import parse_mood
-from recommender import recommend
 
-DATASET_PATH = Path("data/processed/dataset_labeled.csv")
+sys.path.insert(0, str(Path(__file__).parent))
+
+from recommendation.mood_parser import parse_mood
+from recommendation.recommender import recommend
+
+DATASET_PATH = Path("data/processed/nepali_dataset.csv")
 MODELS_DIR   = Path("models")
 
 BANNER = """
@@ -25,9 +28,7 @@ BANNER = """
 """
 
 SEP = "─" * 54
-
 SONG_LABELS = ["MATCHING YOUR MOOD", "THE BRIDGE", "YOUR DESTINATION"]
-
 POSITIVE_WORDS = {
     "good", "great", "better", "much better", "amazing", "awesome",
     "happy", "fantastic", "fine", "wonderful", "yes", "yeah", "yep",
@@ -36,29 +37,27 @@ POSITIVE_WORDS = {
 
 
 def is_feeling_better(text: str) -> bool:
-    lowered = text.lower().strip()
-    return any(word in lowered for word in POSITIVE_WORDS)
+    return any(word in text.lower().strip() for word in POSITIVE_WORDS)
 
 
 def print_songs(emotion: str, songs: list[dict]) -> None:
     print(f"\n  Detected emotion: {emotion}")
     print(f"\n  Here's your journey to a better place:\n")
     print(SEP)
-
     for song, label in zip(songs, SONG_LABELS):
         print(f"\n  {label}")
         print(f"  {song['track_name']}")
         print(f"  {song['artists']}")
         print(f"  Valence: {song['valence']}  |  Energy: {song['energy']}")
         print(f"  {song['spotify_url']}")
-
     print(f"\n{SEP}")
 
 
 def run() -> None:
     print(BANNER)
 
-    for path, label in [(DATASET_PATH, "dataset"), (MODELS_DIR / "emotion_classifier_mlp.pkl", "MLP model")]:
+    mlp_path = MODELS_DIR / "emotion_classifier_mlp_nepali.pkl"
+    for path, label in [(DATASET_PATH, "Nepali dataset"), (mlp_path, "Nepali MLP model")]:
         if not path.exists():
             print(f"  Error: {label} not found.")
             print("  Run 'make train' first to set up the data pipeline.")
@@ -66,17 +65,15 @@ def run() -> None:
 
     print("  Loading song database...", end=" ", flush=True)
     df = pd.read_csv(DATASET_PATH)
-    print(f"done  ({len(df):,} songs)")
+    print(f"done  ({len(df):,} Nepali songs)")
 
-    print("  Loading MLP neural network...", end=" ", flush=True)
-    mlp = joblib.load(MODELS_DIR / "emotion_classifier_mlp.pkl")
-    le  = joblib.load(MODELS_DIR / "genre_label_encoder.pkl")
+    print("  Loading Nepali MLP neural network...", end=" ", flush=True)
+    mlp = joblib.load(mlp_path)
     print("done\n")
 
     while True:
         print("  How are you feeling right now?")
         print("  (type 'quit' to exit)\n")
-
         user_input = input("  > ").strip()
 
         if user_input.lower() in {"quit", "exit", "q"}:
@@ -89,27 +86,23 @@ def run() -> None:
 
         print("\n  Detecting your mood...", end=" ", flush=True)
         emotion = parse_mood(user_input)
-        songs = recommend(emotion, df, mlp_model=mlp, genre_encoder=le)
+        songs   = recommend(emotion, df, mlp_model=mlp)
         print("done\n")
 
         print_songs(emotion, songs)
-
         print("\n  Listen through them in order.")
         print("  How are you feeling now?\n")
         follow_up = input("  > ").strip()
 
         if is_feeling_better(follow_up):
             print("\n  Glad to hear it. Music has a way of doing that. 🎵\n")
-            print("  Want to go again? How are you feeling?\n")
             continue
 
-        # User still not feeling great — give them another set
         print("\n  Let's try another set.\n")
         print("  Detecting your mood...", end=" ", flush=True)
         emotion2 = parse_mood(follow_up)
-        songs2 = recommend(emotion2, df, mlp_model=mlp, genre_encoder=le)
+        songs2   = recommend(emotion2, df, mlp_model=mlp)
         print("done\n")
-
         print_songs(emotion2, songs2)
         print("\n  Take your time with these. 🎵\n")
 

@@ -39,6 +39,9 @@ env/
 # ── Claude Code (local tool — not part of the project) ────
 .claude/
 
+# ── Spotify OAuth token cache ──────────────────────────────
+backend/.spotify_cache
+
 # ── Jupyter ───────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb

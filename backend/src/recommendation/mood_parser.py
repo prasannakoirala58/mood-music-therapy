@@ -1,5 +1,5 @@
 """
-mood_parser.py
+recommendation/mood_parser.py
 
 Sends user mood text to OpenAI GPT-4o-mini with a strict classification prompt.
 Returns exactly one of 6 emotion labels: Happy, Sad, Angry, Fear, Disgust, Surprise.
@@ -38,7 +38,7 @@ def parse_mood(user_text: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=10,
-        temperature=0,        # deterministic — same input always returns same label
+        temperature=0,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text},
@@ -50,31 +50,8 @@ def parse_mood(user_text: str) -> str:
     label = raw.capitalize()
 
     if label not in VALID_EMOTIONS:
-        # Fallback: if model somehow returns something unexpected, default to Sad
         logger.warning(f"[MOOD] unexpected label from GPT: {raw!r} — defaulting to Sad")
         return "Sad"
 
     logger.info(f"[MOOD] '{label}' ({elapsed_ms:.0f}ms)")
     return label
-
-
-if __name__ == "__main__":
-    test_cases = [
-        ("I feel empty and hopeless, nothing excites me",          "Sad"),
-        ("Everything is making me so angry right now",             "Angry"),
-        ("I'm so pumped and happy, best day ever!",                "Happy"),
-        ("I'm nervous and my heart is racing",                     "Fear"),
-        ("Feeling gross and disgusted by everything around me",    "Disgust"),
-        ("I just got the most unexpected news, totally shocked",   "Surprise"),
-    ]
-
-    print("Testing mood parser...\n")
-    passed = 0
-    for text, expected in test_cases:
-        result = parse_mood(text)
-        status = "✓" if result == expected else "✗"
-        print(f"  {status} [{result:<9}] {text[:55]}")
-        if result == expected:
-            passed += 1
-
-    print(f"\n  {passed}/{len(test_cases)} passed")

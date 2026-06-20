@@ -15,6 +15,11 @@ export interface RecommendResult {
   songs: Song[]
 }
 
+export interface ClassifyResult {
+  predictions: Record<string, number>   // emotion → probability 0-1
+  top_emotion: string
+}
+
 export interface EmotionMeta {
   color: string
   glow: string
