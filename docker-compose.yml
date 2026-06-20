@@ -11,17 +11,17 @@
 services:
   backend-api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:
       # Models and data live outside the container so retraining persists
-      - ./backend/data:/app/data
-      - ./backend/models:/app/models
+      - ./backend/data:/app/backend/data
+      - ./backend/models:/app/backend/models
     env_file:
       - .env
-    command: uv run uvicorn src.api:app --host 0.0.0.0 --port 8000
+    command: make api
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

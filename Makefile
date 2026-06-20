@@ -82,8 +82,31 @@ start: ## Smart start — trains Nepali models if missing, then runs the CLI
 	fi
 	$(MAKE) run
 
+.PHONY: prepare-api
+prepare-api: ## Generate missing processed CSV/model files needed by the API when possible
+	@if [ ! -f $(BACKEND_DIR)/data/processed/nepali_dataset_500.csv ] && [ -f $(BACKEND_DIR)/data/raw/features.csv ]; then \
+		echo ""; \
+		echo "  nepali_dataset_500.csv not found — generating it from features.csv..."; \
+		echo ""; \
+		$(MAKE) process; \
+	fi
+	@if [ ! -f $(BACKEND_DIR)/data/processed/nepali_dataset.csv ]; then \
+		echo ""; \
+		echo "  nepali_dataset.csv not found."; \
+		echo "  Run 'make collect' first so the API has its production dataset."; \
+		echo ""; \
+		exit 1; \
+	fi
+	@if [ ! -f $(BACKEND_DIR)/models/emotion_classifier_mlp_nepali.pkl ]; then \
+		echo ""; \
+		echo "  Nepali models not found — training now..."; \
+		echo "  This takes ~1 minute and only happens once."; \
+		echo ""; \
+		$(MAKE) train; \
+	fi
+
 .PHONY: api
-api: ## Start the FastAPI backend on port 8000 (hot-reload, Nepali models must exist)
+api: prepare-api ## Start the FastAPI backend on port 8000 (hot-reload, prepares data/models first)
 	cd $(BACKEND_DIR) && uv run uvicorn src.api:app --reload --port 8000
 
 .PHONY: frontend

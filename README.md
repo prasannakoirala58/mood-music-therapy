@@ -128,6 +128,9 @@ docker compose up --build
 # Frontend: http://localhost:5173
 ```
 
+> Docker now starts the backend through `make api`, so it will generate `nepali_dataset_500.csv`
+> from `features.csv` when available and train the Nepali models automatically before uvicorn starts.
+
 **Web app (two terminals):**
 ```bash
 make api        # Terminal 1 — FastAPI backend on http://localhost:8000
