@@ -1,10 +1,13 @@
 # ── Secrets ──────────────────────────────────────────────
 .env
 
-# ── Data (too large / generated) ─────────────────────────
-backend/data/raw/
-backend/data/processed/
-backend/models/
+# ── Data (too large / generated — folders tracked, contents ignored) ──
+backend/data/raw/*
+backend/data/processed/*
+backend/models/*
+!backend/data/raw/.gitkeep
+!backend/data/processed/.gitkeep
+!backend/models/.gitkeep
 
 # ── Python ───────────────────────────────────────────────
 __pycache__/
