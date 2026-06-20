@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends make \
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# The backend image is built from the repository root context in docker-compose.yml.
+# The backend image is built from the repository root build context in docker-compose.yml.
 WORKDIR /app/backend
 
 # Copy dependency manifest first — Docker layer cache: deps only rebuild when pyproject.toml changes
