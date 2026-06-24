@@ -9,6 +9,12 @@ backend/models/*
 !backend/data/processed/.gitkeep
 !backend/models/.gitkeep
 
+# ── Nepali production files — committed for submission ────────────────
+!backend/data/processed/nepali_dataset.csv
+!backend/data/processed/nepali_dataset_500.csv
+!backend/models/emotion_classifier_mlp_nepali.pkl
+!backend/models/emotion_classifier_rf_nepali.pkl
+
 # ── Python ───────────────────────────────────────────────
 __pycache__/
 *.py[cod]

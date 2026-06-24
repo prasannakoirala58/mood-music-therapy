@@ -75,10 +75,10 @@ Random Forest (baseline)
 
 MLP Neural Network  ← used live in recommendations and classify
   Input:  7 features → StandardScaler
-  Hidden: 128 → 64 neurons (ReLU)
+  Hidden: 32 → 16 neurons (ReLU)
   Output: 6 emotions (softmax)
-  early_stopping + validation_fraction=0.15
-  Accuracy: 69.33% on 75 held-out Nepali test songs
+  early_stopping + validation_fraction=0.20
+  Accuracy: 66.67% on 75 held-out Nepali test songs
 ```
 
 These are **realistic** accuracies on unseen Nepali songs — not the 99%+ you get when training on rule-labeled Kaggle data where the features and labels are circular.
